@@ -1,0 +1,57 @@
+{
+  "name": "gh-viewer",
+  "version": "0.1.0",
+  "description": "CLI to explore GitHub repositories via the REST API without cloning.",
+  "license": "MIT",
+  "author": "Kenn Costales",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./cli": {
+      "types": "./dist/cli.d.ts",
+      "import": "./dist/cli.js"
+    }
+  },
+  "bin": {
+    "gh-viewer": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "tsc --noEmit",
+    "prepare": "npm run build"
+  },
+  "dependencies": {
+    "minimatch": "^9.0.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.7",
+    "typescript": "^5.4.5"
+  },
+  "keywords": [
+    "github",
+    "cli",
+    "viewer",
+    "developer-tools"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kennyfrc/gh-viewer.git"
+  },
+  "bugs": {
+    "url": "https://github.com/kennyfrc/gh-viewer/issues"
+  },
+  "homepage": "https://github.com/kennyfrc/gh-viewer#readme",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
