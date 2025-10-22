@@ -32,7 +32,8 @@
     "build": "tsc -p tsconfig.json",
     "lint": "tsc --noEmit",
     "prepare": "npm run build",
-    "test": "npm run build && node --test tests/**/*.test.js"
+    "test": "npm run build && node --test tests/**/*.test.js",
+    "release": "npm pkg fix && npm version patch && npm publish"
   },
   "dependencies": {
     "minimatch": "^9.0.4"

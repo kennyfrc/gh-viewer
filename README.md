@@ -57,6 +57,14 @@ gh-viewer --org my-org --list-repos
 gh-viewer --user octocat --list-repos
 ```
 
+### Release
+
+```
+npm run release
+```
+
+This runs `npm pkg fix`, bumps the patch version, rebuilds, and publishes.
+
 ### Options
 
 - `--repo <owner/repo>` — target repository for list/read/glob.
