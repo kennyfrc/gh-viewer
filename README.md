@@ -1,10 +1,14 @@
 # gh-viewer
 
-`gh-viewer` lets you explore GitHub repositories from the command line using the GitHub REST API. It focuses on three operations:
+`gh-viewer` lets you explore GitHub repositories from the command line using the GitHub REST API. It focuses on fast repository discovery and inspection:
 
 - list directories within a repo (`--list`)
 - read file contents with optional line ranges (`--read`)
 - run glob patterns against the repository tree (`--glob`)
+- search accessible and public repositories (`--search-repos`)
+- search code within a repository (`--search-code`)
+- search commit history (`--commit-search`)
+- compare refs with diff stats (`--diff`)
 
 AI agents love it because it trades GitHub's sluggish web UI for scriptable queries. Pair `gh-viewer` with an AI code assistant to skim public repositories quickly, follow glob leads, and read files in context without bouncing through browser tabs.
 
@@ -43,7 +47,12 @@ See [Authenticating to the REST API](https://docs.github.com/en/rest/authenticat
 ```
 gh-viewer --repo owner/name [--ref main] --list path
 gh-viewer --repo owner/name --read path[@start-end]
+gh-viewer --repo owner/name --read path --line-numbers
 gh-viewer --repo owner/name [--ref main] --glob "src/**/*.ts"
+gh-viewer --search-repos --pattern viewer --language TypeScript --limit 20
+gh-viewer --repo owner/name --search-code --pattern "createViewer" --path src
+gh-viewer --repo owner/name --commit-search --query "fix" --since 2024-01-01
+gh-viewer --repo owner/name --diff --base main --head feature --include-patches
 gh-viewer --org my-org --list-repos
 gh-viewer --user octocat --list-repos
 ```
@@ -55,9 +64,14 @@ gh-viewer --user octocat --list-repos
 - `--list <path>` — list entries at `path` (default `.`) in the repository.
 - `--read <path[@start-end]>` — print file contents; optional `@start-end` limits the line range.
 - `--glob <pattern>` — filter the repository tree with a glob expression (uses [`minimatch`](https://github.com/isaacs/minimatch)).
+- `--search-repos` — search repositories with optional `--pattern`, `--language`, `--limit`, and `--offset` filters.
+- `--search-code` — run a code search within the repository (requires `--pattern`; supports `--path`, `--limit`, `--offset`).
+- `--commit-search` — search commits with optional `--query`, `--author`, `--path`, `--since`, `--until`, `--limit`, `--offset`.
+- `--diff` — compare refs using `--base` and `--head`, optionally `--include-patches` to embed unified diffs.
 - `--ref <branch|tag|sha>` — override the default branch when resolving content.
 - `--json` — output machine-readable JSON instead of the default transcript.
 - `--help` — print usage help.
+- `--line-numbers` — prefix read output with line numbers for reproducible transcripts.
 
 ## Programmatic API
 
@@ -70,6 +84,13 @@ const listing = await viewer.listPath(repo, ".", { ref: "main" });
 
 console.log(listing.entries);
 ```
+
+Additional helpers let you stay inside GitHub's REST API without cloning:
+
+- `viewer.searchRepositories({ pattern, organization, language, limit, offset })` prioritises repos you can access before falling back to public search.
+- `viewer.searchCode(repo, { pattern, path, limit, offset })` returns snippets grouped by file with surrounding context.
+- `viewer.searchCommits(repo, { query, author, path, since, until, limit, offset })` surfaces commit metadata.
+- `viewer.compareCommits(repo, base, head, { includePatches })` returns ahead/behind stats and per-file changes.
 
 ## Examples
 

@@ -5,9 +5,15 @@ import {
   parseRepo,
   scopeLabel,
   ViewerError,
+  type DirectoryEntry,
   type RepoTarget,
   type Scope,
   type ReadRange,
+  type RepositorySummary,
+  type CodeSearchResultItem,
+  type CodeSearchSnippet,
+  type CommitSearchResultItem,
+  type CompareCommitsResult,
 } from "./viewer.js";
 
 class CliError extends Error {
@@ -24,16 +30,50 @@ interface CliArgs {
   org?: string;
   user?: string;
   listRepos: boolean;
+  searchRepos?: boolean;
   list?: string;
   read?: string;
   glob?: string;
+  searchCode?: boolean;
+  commitSearch?: boolean;
+  diff?: boolean;
   ref?: string;
   branch?: string;
+  pattern?: string;
+  language?: string;
+  limit?: number;
+  offset?: number;
+  pathFilter?: string;
+  author?: string;
+  query?: string;
+  since?: string;
+  until?: string;
+  base?: string;
+  head?: string;
+  includePatches?: boolean;
+  lineNumbers?: boolean;
 }
 
 type CliOutput =
   | { action: "list-repos"; scope: Scope; repos: string[] }
-  | { action: "list"; repo: RepoTarget; ref?: string; path: string; entries: string[] }
+  | {
+      action: "search-repos";
+      params: {
+        pattern?: string;
+        organization?: string;
+        language?: string;
+        limit: number;
+        offset: number;
+      };
+      repositories: RepositorySummary[];
+    }
+  | {
+      action: "list";
+      repo: RepoTarget;
+      ref?: string;
+      path: string;
+      entries: DirectoryEntry[];
+    }
   | {
       action: "read";
       repo: RepoTarget;
@@ -49,6 +89,37 @@ type CliOutput =
       pattern: string;
       matches: string[];
       truncated: boolean;
+    }
+  | {
+      action: "code-search";
+      repo: RepoTarget;
+      pattern: string;
+      path?: string;
+      limit: number;
+      offset: number;
+      results: CodeSearchResultItem[];
+    }
+  | {
+      action: "commit-search";
+      repo: RepoTarget;
+      options: {
+        query?: string;
+        author?: string;
+        path?: string;
+        since?: string;
+        until?: string;
+        limit: number;
+        offset: number;
+      };
+      results: CommitSearchResultItem[];
+    }
+  | {
+      action: "compare";
+      repo: RepoTarget;
+      base: string;
+      head: string;
+      includePatches: boolean;
+      result: CompareCommitsResult;
     };
 
 const viewer = createViewer();
@@ -84,14 +155,60 @@ try {
     performedAction = true;
   }
 
+  if (args.searchRepos) {
+    const limit = args.limit ?? 30;
+    const offset = args.offset ?? 0;
+    const params = {
+      pattern: args.pattern,
+      organization: args.org,
+      language: args.language,
+      limit,
+      offset,
+    };
+    const repositories = await viewer.searchRepositories(params);
+    if (args.json) {
+      outputs.push({ action: "search-repos", params, repositories });
+    } else {
+      const detailParts = [] as string[];
+      if (params.pattern) {
+        detailParts.push(`pattern="${params.pattern}"`);
+      }
+      if (params.organization) {
+        detailParts.push(`org=${params.organization}`);
+      }
+      if (params.language) {
+        detailParts.push(`language=${params.language}`);
+      }
+      detailParts.push(`limit=${limit}`);
+      if (offset > 0) {
+        detailParts.push(`offset=${offset}`);
+      }
+      logSuccess("Search Repositories", detailParts.join(" "));
+      for (const repo of repositories) {
+        const visibility = repo.visibility ?? (repo.private ? "private" : "public");
+        console.log(`${repo.fullName} (${visibility})`);
+        console.log(`  ⭐ ${repo.stars}  Forks ${repo.forks}`);
+        if (repo.description) {
+          console.log(`  ${repo.description}`);
+        }
+      }
+    }
+    performedAction = true;
+  }
+
   const repoTarget = args.repo ? parseRepo(args.repo) : null;
-  if ((args.list || args.read || args.glob) && !repoTarget) {
+  if ((args.list || args.read || args.glob || args.searchCode || args.commitSearch || args.diff) && !repoTarget) {
     throw new CliError("Missing --repo owner/name for repository operations.");
   }
 
   if (args.list && repoTarget) {
     const ref = args.ref ?? args.branch ?? undefined;
-    const listResult = await viewer.listPath(repoTarget, args.list, { ref });
+    const listOptions = {
+      ref,
+      limit: args.limit,
+      offset: args.offset,
+    };
+    const listResult = await viewer.listPath(repoTarget, args.list, listOptions);
     if (args.json) {
       outputs.push({
         action: "list",
@@ -108,7 +225,7 @@ try {
         }`
       );
       for (const entry of listResult.entries) {
-        console.log(entry);
+        console.log(formatDirectoryEntry(entry));
       }
     }
     performedAction = true;
@@ -117,7 +234,11 @@ try {
   if (args.read && repoTarget) {
     const ref = args.ref ?? args.branch ?? undefined;
     const { path, range } = parseReadArg(args.read);
-    const readResult = await viewer.readFile(repoTarget, path, { ref, range });
+    const readResult = await viewer.readFile(repoTarget, path, {
+      ref,
+      range,
+      includeLineNumbers: Boolean(args.lineNumbers),
+    });
     if (args.json) {
       outputs.push({
         action: "read",
@@ -171,6 +292,139 @@ try {
     performedAction = true;
   }
 
+  if (args.searchCode && repoTarget) {
+    const limit = args.limit ?? 30;
+    const offset = args.offset ?? 0;
+    if (!args.pattern) {
+      throw new CliError("--pattern is required for --search-code");
+    }
+    const results = await viewer.searchCode(repoTarget, {
+      pattern: args.pattern,
+      path: args.pathFilter,
+      limit,
+      offset,
+    });
+    if (args.json) {
+      outputs.push({
+        action: "code-search",
+        repo: repoTarget,
+        pattern: args.pattern,
+        path: args.pathFilter,
+        limit,
+        offset,
+        results,
+      });
+    } else {
+      const detailParts = [`pattern="${args.pattern}"`, `limit=${limit}`];
+      if (args.pathFilter) {
+        detailParts.push(`path=${args.pathFilter}`);
+      }
+      if (offset > 0) {
+        detailParts.push(`offset=${offset}`);
+      }
+      logSuccess("Code Search", detailParts.join(" "));
+      for (const item of results) {
+        console.log(`${item.repository.fullName}/${item.path} @ ${item.ref}`);
+        for (const snippet of item.snippets) {
+          printSnippet(snippet);
+        }
+      }
+    }
+    performedAction = true;
+  }
+
+  if (args.commitSearch && repoTarget) {
+    const limit = args.limit ?? 50;
+    const offset = args.offset ?? 0;
+    const options = {
+      query: args.query,
+      author: args.author,
+      path: args.pathFilter,
+      since: args.since,
+      until: args.until,
+      limit,
+      offset,
+    };
+    const results = await viewer.searchCommits(repoTarget, options);
+    if (args.json) {
+      outputs.push({ action: "commit-search", repo: repoTarget, options, results });
+    } else {
+      const detailParts = [] as string[];
+      if (args.query) {
+        detailParts.push(`query="${args.query}"`);
+      }
+      if (args.author) {
+        detailParts.push(`author=${args.author}`);
+      }
+      if (args.pathFilter) {
+        detailParts.push(`path=${args.pathFilter}`);
+      }
+      if (args.since) {
+        detailParts.push(`since=${args.since}`);
+      }
+      if (args.until) {
+        detailParts.push(`until=${args.until}`);
+      }
+      detailParts.push(`limit=${limit}`);
+      if (offset > 0) {
+        detailParts.push(`offset=${offset}`);
+      }
+      logSuccess("Commit Search", detailParts.join(" "));
+      for (const commit of results) {
+        console.log(`${commit.sha.slice(0, 12)} ${commit.message.split("\n")[0] ?? ""}`);
+        if (commit.authorName) {
+          console.log(`  Author: ${commit.authorName}${commit.authorEmail ? ` <${commit.authorEmail}>` : ""}`);
+        }
+        if (commit.date) {
+          console.log(`  Date: ${commit.date}`);
+        }
+        if (commit.stats) {
+          console.log(
+            `  Stats: +${commit.stats.additions ?? 0} -${commit.stats.deletions ?? 0} (${commit.stats.total ?? 0} files)`
+          );
+        }
+      }
+    }
+    performedAction = true;
+  }
+
+  if (args.diff && repoTarget) {
+    const baseRef = args.base;
+    const headRef = args.head;
+    if (!baseRef) {
+      throw new CliError("--base is required for --diff");
+    }
+    if (!headRef) {
+      throw new CliError("--head is required for --diff");
+    }
+    const includePatches = Boolean(args.includePatches);
+    const result = await viewer.compareCommits(repoTarget, baseRef, headRef, {
+      includePatches,
+    });
+    if (args.json) {
+      outputs.push({
+        action: "compare",
+        repo: repoTarget,
+        base: baseRef,
+        head: headRef,
+        includePatches,
+        result,
+      });
+    } else {
+      logSuccess(
+        "Compare",
+        `${repoTarget.owner}/${repoTarget.repo} ${baseRef}...${headRef} (ahead ${result.aheadBy}, behind ${result.behindBy})`
+      );
+      for (const file of result.files) {
+        console.log(`${file.status.padEnd(8)} ${file.filename} (+${file.additions} -${file.deletions})`);
+        if (includePatches && file.patch) {
+          console.log(file.patch);
+        }
+      }
+    }
+    performedAction = true;
+  }
+
   if (args.json) {
     console.log(JSON.stringify(outputs, null, 2));
   }
@@ -205,16 +459,50 @@ function parseArgs(argv: string[]): CliArgs {
       parsed.user = valueOrThrow(arg, argv[++index]);
     } else if (arg === "--list-repos") {
       parsed.listRepos = true;
+    } else if (arg === "--search-repos") {
+      parsed.searchRepos = true;
     } else if (arg === "--list") {
       parsed.list = valueOrThrow(arg, argv[++index] ?? ".");
     } else if (arg === "--read") {
       parsed.read = valueOrThrow(arg, argv[++index]);
     } else if (arg === "--glob") {
       parsed.glob = valueOrThrow(arg, argv[++index]);
+    } else if (arg === "--search-code") {
+      parsed.searchCode = true;
+    } else if (arg === "--commit-search") {
+      parsed.commitSearch = true;
+    } else if (arg === "--diff") {
+      parsed.diff = true;
     } else if (arg === "--ref") {
       parsed.ref = valueOrThrow(arg, argv[++index]);
     } else if (arg === "--branch") {
       parsed.branch = valueOrThrow(arg, argv[++index]);
+    } else if (arg === "--pattern") {
+      parsed.pattern = valueOrThrow(arg, argv[++index]);
+    } else if (arg === "--language") {
+      parsed.language = valueOrThrow(arg, argv[++index]);
+    } else if (arg === "--limit") {
+      parsed.limit = numberOrThrow(arg, argv[++index]);
+    } else if (arg === "--offset") {
+      parsed.offset = numberOrThrow(arg, argv[++index]);
+    } else if (arg === "--path") {
+      parsed.pathFilter = valueOrThrow(arg, argv[++index]);
+    } else if (arg === "--author") {
+      parsed.author = valueOrThrow(arg, argv[++index]);
+    } else if (arg === "--query") {
+      parsed.query = valueOrThrow(arg, argv[++index]);
+    } else if (arg === "--since") {
+      parsed.since = valueOrThrow(arg, argv[++index]);
+    } else if (arg === "--until") {
+      parsed.until = valueOrThrow(arg, argv[++index]);
+    } else if (arg === "--base") {
+      parsed.base = valueOrThrow(arg, argv[++index]);
+    } else if (arg === "--head") {
+      parsed.head = valueOrThrow(arg, argv[++index]);
+    } else if (arg === "--include-patches") {
+      parsed.includePatches = true;
+    } else if (arg === "--line-numbers") {
+      parsed.lineNumbers = true;
     } else {
       throw new CliError(`Unknown option: ${arg}`);
     }
@@ -227,6 +515,18 @@ function valueOrThrow(option: string, value?: string): string {
     throw new CliError(`Missing value for ${option}`);
   }
   return value;
+}
+
+function numberOrThrow(option: string, value?: string): number {
+  const raw = valueOrThrow(option, value);
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) {
+    throw new CliError(`Invalid number for ${option}: ${raw}`);
+  }
+  if (parsed < 0) {
+    throw new CliError(`Value for ${option} must be non-negative.`);
+  }
+  return parsed;
 }
 
 function parseReadArg(arg: string): { path: string; range?: ReadRange } {
@@ -249,6 +549,34 @@ function parseReadArg(arg: string): { path: string; range?: ReadRange } {
   return { path, range: { start, end } };
 }
 
+function formatDirectoryEntry(entry: DirectoryEntry): string {
+  if (entry.type === "file") {
+    const size = typeof entry.size === "number" ? ` ${entry.size}B` : "";
+    return `- ${entry.name}${size}`;
+  }
+  if (entry.type === "dir") {
+    return `d ${entry.name}/`;
+  }
+  if (entry.type === "symlink") {
+    const target = entry.target ? ` -> ${entry.target}` : "";
+    return `l ${entry.name}${target}`;
+  }
+  if (entry.type === "submodule") {
+    return `m ${entry.name}`;
+  }
+  return `${entry.type} ${entry.name}`;
+}
+
+function printSnippet(snippet: CodeSearchSnippet): void {
+  for (let lineIndex = 0; lineIndex < snippet.lines.length; lineIndex += 1) {
+    const lineNumber = snippet.startLine + lineIndex;
+    console.log(`${lineNumber.toString().padStart(6, " ")} ${snippet.lines[lineIndex] ?? ""}`);
+  }
+  if (snippet.lines.length > 0) {
+    console.log("");
+  }
+}
+
 function logSuccess(action: string, detail?: string): void {
   console.log(`✓ ${action}`);
   if (detail) {
@@ -263,16 +591,37 @@ function printHelp(): void {
     'gh-viewer --repo owner/name [--ref main] --glob "pattern"',
     "gh-viewer --org org --list-repos",
     "gh-viewer --user user --list-repos",
+    "gh-viewer --search-repos [--pattern text] [--org org] [--language lang] [--limit n]",
+    'gh-viewer --repo owner/name --search-code --pattern "expr" [--path dir] [--limit n] [--offset n]',
+    "gh-viewer --repo owner/name --commit-search [--query text] [--author you] [--since iso]",
+    "gh-viewer --repo owner/name --diff --base main --head topic [--include-patches]",
     "",
     "Options:",
     "  --repo owner/name        Target repository.",
     "  --org name               List repositories for an organization.",
     "  --user name              List repositories for a user.",
+    "  --search-repos           Search repositories across accessible and public sources.",
     "  --list path              List the entries at path (default .).",
     "  --read path[@start-end]  Read file contents with optional line range.",
     '  --glob "pattern"         Glob files via git trees API.',
+    "  --search-code            Run a code search within the repository.",
+    "  --commit-search          Search commits within the repository.",
+    "  --diff                   Compare two refs within the repository.",
     "  --ref ref                Override branch/tag/SHA.",
     "  --branch name            Alias for --ref.",
+    "  --pattern text           Pattern for repository or code searches.",
+    "  --language lang          Filter repositories by language.",
+    "  --limit n                Limit results (context-sensitive).",
+    "  --offset n               Skip results before returning (context-sensitive).",
+    "  --path glob              Restrict code or commit search to a path.",
+    "  --query text             Additional query for commit search.",
+    "  --author user            Filter commits by author.",
+    "  --since iso              Filter commits >= ISO 8601 date.",
+    "  --until iso              Filter commits <= ISO 8601 date.",
+    "  --base ref               Base reference for diffs.",
+    "  --head ref               Head reference for diffs.",
+    "  --include-patches        Include patch text in diff results.",
+    "  --line-numbers           Prefix read output with line numbers.",
     "  --list-repos             List repositories for the given org/user.",
     "  --json                   Emit JSON instead of human output.",
     "  --help                   Show this message.",
