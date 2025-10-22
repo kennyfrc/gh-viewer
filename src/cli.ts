@@ -51,12 +51,6 @@ type CliOutput =
       truncated: boolean;
     };
 
-type ActionSummary =
-  | { action: "list-repos"; scope: Scope; count: number }
-  | { action: "list"; repo: RepoTarget; ref?: string; path: string; count: number }
-  | { action: "read"; repo: RepoTarget; ref?: string; path: string; range?: ReadRange; lines: number }
-  | { action: "glob"; repo: RepoTarget; ref: string; pattern: string; matches: number; truncated: boolean };
-
 const viewer = createViewer();
 const args = parseArgs(process.argv.slice(2));
 
@@ -66,7 +60,7 @@ if (args.help) {
 }
 
 const outputs: CliOutput[] = [];
-const actions: ActionSummary[] = [];
+let performedAction = false;
 
 try {
   if (args.listRepos) {
@@ -87,7 +81,7 @@ try {
         console.log(repo);
       }
     }
-    actions.push({ action: "list-repos", scope, count: repos.length });
+    performedAction = true;
   }
 
   const repoTarget = args.repo ? parseRepo(args.repo) : null;
@@ -117,13 +111,7 @@ try {
         console.log(entry);
       }
     }
-    actions.push({
-      action: "list",
-      repo: repoTarget,
-      ref: listResult.ref,
-      path: listResult.path,
-      count: listResult.entries.length,
-    });
+    performedAction = true;
   }
 
   if (args.read && repoTarget) {
@@ -151,14 +139,7 @@ try {
         console.log(line);
       }
     }
-    actions.push({
-      action: "read",
-      repo: repoTarget,
-      ref: readResult.ref,
-      path: readResult.path,
-      range: readResult.range,
-      lines: readResult.lines.length,
-    });
+    performedAction = true;
   }
 
   if (args.glob && repoTarget) {
@@ -187,21 +168,14 @@ try {
         console.error("Tree response truncated by GitHub; matches may be incomplete.");
       }
     }
-    actions.push({
-      action: "glob",
-      repo: repoTarget,
-      ref: globResult.ref,
-      pattern: globResult.pattern,
-      matches: globResult.matches.length,
-      truncated: globResult.truncated,
-    });
+    performedAction = true;
   }
 
   if (args.json) {
     console.log(JSON.stringify(outputs, null, 2));
   }
 
-  if (actions.length === 0 && !args.json) {
+  if (!performedAction && !args.json) {
     printHelp();
   }
 } catch (error) {
