@@ -11,13 +11,13 @@ AI agents love it because it trades GitHub's sluggish web UI for scriptable quer
 ## Installation
 
 ```
-npm install --global gh-viewer
+npm install --global @kennyfrc/gh-viewer
 ```
 
 Or run directly without installing:
 
 ```
-npx gh-viewer --help
+npx @kennyfrc/gh-viewer --help
 ```
 
 To hack on the CLI locally without publishing:
@@ -62,7 +62,7 @@ gh-viewer --user octocat --list-repos
 ## Programmatic API
 
 ```ts
-import { createViewer, parseRepo } from "gh-viewer";
+import { createViewer, parseRepo } from "@kennyfrc/gh-viewer";
 
 const viewer = createViewer({ token: process.env.GITHUB_TOKEN });
 const repo = parseRepo("octocat/hello-world");
