@@ -10,7 +10,9 @@
 - search commit history (`--commit-search`)
 - compare refs with diff stats (`--diff`)
 
-AI agents love it because it trades GitHub's sluggish web UI for scriptable queries. Pair `gh-viewer` with an AI code assistant to skim public repositories quickly, follow glob leads, and read files in context without bouncing through browser tabs.
+## Motivation
+
+I often use open source repos to compare my solutions with those of someone who has tackled the same problem before, and I like learning how my dependencies work under the hood. Both of these tasks were tedious manually, but were always worth it to get to quality solutions. Nowadays, thanks to Claude Code and Codex, that task is much easier. However, tooling is limited. The problem with GitHub is that the standard `fetch` tools struggle to see the file tree, and AI agents have to work around JavaScript-heavy file pages by using raw.githubusercontent.com. `gh-viewer` solves these problems. Just tell your AI agent to learn how to use `gh-viewer` by invoking `gh-viewer -h`, and then you can ask it specific questions about your target repo, like "using gh-viewer, please study how useState is implemented in facebook/react, and how I might implement my own from scratch".
 
 ## Installation
 
