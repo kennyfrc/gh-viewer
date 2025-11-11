@@ -59,14 +59,6 @@ gh-viewer --org my-org --list-repos
 gh-viewer --user octocat --list-repos
 ```
 
-### Release
-
-```
-npm run release
-```
-
-This runs `npm pkg fix`, bumps the patch version, rebuilds, and publishes.
-
 ### Options
 
 - `--repo <owner/repo>` — target repository for list/read/glob.
@@ -111,14 +103,10 @@ gh-viewer --repo e2b-dev/E2B --read packages/js-sdk/src/api/index.ts@1-150
 gh-viewer --repo e2b-dev/E2B --glob "spec/**/*.proto"
 ```
 
-Each successful action echoes a `✓` line, mirroring the sample transcript.
-
 ## License
 
 Released under the [MIT License](LICENSE).
 
 ## Notes
 
-- `--glob` pulls the full recursive tree (`GET /git/trees/:sha?recursive=1`). The response is truncated when the tree exceeds 100,000 entries or about 7 MB ([Git trees API](https://docs.github.com/en/rest/git/trees?apiVersion=2022-11-28#get-a-tree)).
-- Large files (>1 MB) require the raw media type; extremely large files (>100 MB) are unavailable via the contents API ([Get repository content](https://docs.github.com/en/rest/repos/contents?apiVersion=2022-11-28#get-repository-content)).
-- Provide explicit line ranges when reading large files to keep output manageable.
+- Large files (>1 MB) or repositories with many files may require explicit line ranges.
