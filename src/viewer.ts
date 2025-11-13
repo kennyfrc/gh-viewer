@@ -309,7 +309,6 @@ interface GitHubCompareResponse {
   files?: GitHubCompareFile[];
 }
 
-/** Creates viewer with GitHub auth and fetch binding */
 export function createViewer(options: ViewerOptions = {}): Viewer {
   const fetchImpl = options.fetchImpl ?? fetch;
   const authToken = options.token ?? process.env.GITHUB_TOKEN ?? null;
@@ -366,7 +365,6 @@ export function createViewer(options: ViewerOptions = {}): Viewer {
     return results.filter((entry) => entry.length > 0);
   }
 
-  /** Prioritizes accessible repos before falling back to public search */
   async function searchRepositories(
     params: RepositorySearchParams = {}
   ): Promise<RepositorySummary[]> {
@@ -524,7 +522,6 @@ export function createViewer(options: ViewerOptions = {}): Viewer {
     return sorted.slice(offset, offset + limit).map((entry) => entry.summary);
   }
 
-  /** Returns directory entries; client-side limit/offset due to API limitations */
   async function listPath(
     repo: RepoTarget,
     rawPath: string,
@@ -562,7 +559,6 @@ export function createViewer(options: ViewerOptions = {}): Viewer {
     };
   }
 
-  /** Decodes file content and adds stable line numbers */
   async function readFile(
     repo: RepoTarget,
     filePath: string,
@@ -635,9 +631,6 @@ export function createViewer(options: ViewerOptions = {}): Viewer {
     };
   }
 
-  /**
-   * Hydrates blob contents to rebuild full multi-line snippets
- */
   async function searchCode(
     repo: RepoTarget,
     options: CodeSearchOptions

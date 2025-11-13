@@ -240,7 +240,6 @@ try {
     let readPath = args.read;
     let readRange: ReadRange | undefined;
     
-    // --line-range overrides @start-end syntax
     if (args.lineRange && args.read?.includes('@')) {
       console.warn("Warning: --line-range overrides @start-end suffix in path");
     }
@@ -248,10 +247,8 @@ try {
     if (args.lineRange) {
       const [start, end] = args.lineRange;
       readRange = { start, end };
-      // Strip @suffix when using explicit --line-range
       readPath = readPath.split('@')[0];
     } else {
-      // Parse existing @start-end format
       const { path, range } = parseReadArg(args.read);
       readPath = path;
       readRange = range;
@@ -327,7 +324,6 @@ try {
       throw new CliError("--context/-C cannot be used with -A or -B flags");
     }
     
-    // -C takes precedence, then max(-A, -B)
     let contextLines: number | undefined;
     if (args.context !== undefined) {
       contextLines = args.context;
@@ -488,9 +484,10 @@ function parseArgs(argv: string[]): CliArgs {
   };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
+
     if (arg === "--help" || arg === "-h") {
       parsed.help = true;
-    } else if (arg === "--json") {
+    } else if (arg === "--json" || arg === "-j") {
       parsed.json = true;
     } else if (arg === "--repo") {
       parsed.repo = valueOrThrow(arg, argv[++index]);
@@ -502,11 +499,20 @@ function parseArgs(argv: string[]): CliArgs {
       parsed.listRepos = true;
     } else if (arg === "--search-repos") {
       parsed.searchRepos = true;
-    } else if (arg === "--list") {
+    } else if (arg === "--list" || arg === "-l") {
+      if (parsed.list !== undefined) {
+        throw new CliError(`Duplicate list option: ${arg}`);
+      }
       parsed.list = valueOrThrow(arg, argv[++index] ?? ".");
-    } else if (arg === "--read") {
+    } else if (arg === "--read" || arg === "-r") {
+      if (parsed.read !== undefined) {
+        throw new CliError(`Duplicate read option: ${arg}`);
+      }
       parsed.read = valueOrThrow(arg, argv[++index]);
-    } else if (arg === "--glob") {
+    } else if (arg === "--glob" || arg === "-g") {
+      if (parsed.glob !== undefined) {
+        throw new CliError(`Duplicate glob option: ${arg}`);
+      }
       parsed.glob = valueOrThrow(arg, argv[++index]);
     } else if (arg === "--search-code") {
       parsed.searchCode = true;
@@ -585,7 +591,6 @@ function numberOrThrow(option: string, value?: string): number {
   return parsed;
 }
 
-// Parse "path[@start-end]" format for backward compatibility
 function parseReadArg(arg: string): { path: string; range?: ReadRange } {
   const [path, suffix] = arg.split("@");
   if (!path) {
@@ -643,52 +648,50 @@ function logSuccess(action: string, detail?: string): void {
 
 function printHelp(): void {
   const lines = [
-    "gh-viewer --repo owner/name [--ref main] --list path",
-    "gh-viewer --repo owner/name --read path[@start-end]",
-    "gh-viewer --repo owner/name --read path --line-range 50 100",
-    'gh-viewer --repo owner/name [--ref main] --glob "pattern"',
-    "gh-viewer --org org --list-repos",
-    "gh-viewer --user user --list-repos",
-    "gh-viewer --search-repos [--pattern text] [--org org] [--language lang] [--limit n]",
-    'gh-viewer --repo owner/name --search-code --pattern "expr" [--path dir] [--limit n] [--offset n]',
-    'gh-viewer --repo owner/name --search-code --pattern "expr" -C 5',
-    "gh-viewer --repo owner/name --commit-search [--query text] [--author you] [--since iso]",
-    "gh-viewer --repo owner/name --diff --base main --head topic [--include-patches]",
+    "USAGE:",
+    "  gh-viewer --repo owner/name [--ref main] --list path",
+    "  gh-viewer --repo owner/name --read path[@start-end]",
+    "  gh-viewer --repo owner/name --read path --line-range 50 100",
+    '  gh-viewer --repo owner/name [--ref main] --glob "pattern"',
     "",
-    "Options:",
-    "  --repo owner/name        Target repository.",
-    "  --org name               List repositories for an organization.",
-    "  --user name              List repositories for a user.",
-    "  --search-repos           Search repositories across accessible and public sources.",
-    "  --list path              List the entries at path (default .).",
-    "  --read path[@start-end]  Read file contents with optional line range.",
-    "  --line-range start end   Read specific line range (alternative to path@start-end).",
-    '  --glob "pattern"         Glob files via git trees API.',
-    "  --search-code            Run a code search within the repository.",
-    "  -A n                     Show n lines after each match (search-code).",
-    "  -B n                     Show n lines before each match (search-code).",
-    "  -C n                     Show n lines before and after each match (search-code).",
-    "  --context n              Same as -C for search-code.",
-    "  --commit-search          Search commits within the repository.",
-    "  --diff                   Compare two refs within the repository.",
-    "  --ref ref                Override branch/tag/SHA.",
-    "  --branch name            Alias for --ref.",
-    "  --pattern text           Pattern for repository or code searches.",
-    "  --language lang          Filter repositories by language.",
-    "  --limit n                Limit results (context-sensitive).",
-    "  --offset n               Skip results before returning (context-sensitive).",
-    "  --path glob              Restrict code or commit search to a path.",
-    "  --query text             Additional query for commit search.",
-    "  --author user            Filter commits by author.",
-    "  --since iso              Filter commits >= ISO 8601 date.",
-    "  --until iso              Filter commits <= ISO 8601 date.",
-    "  --base ref               Base reference for diffs.",
-    "  --head ref               Head reference for diffs.",
-    "  --include-patches        Include patch text in diff results.",
-    "  --line-numbers           Prefix read output with line numbers.",
-    "  --list-repos             List repositories for the given org/user.",
-    "  --json                   Emit JSON instead of human output.",
-    "  --help                   Show this message.",
+    "OPTIONS:",
+    "  -h, --help               Show this help message",
+    "  -j, --json               Output JSON instead of human-readable text",
+    "  -l, --list [path]        List directory entries (default: .)",
+    "  -r, --read <path>        Read file contents",
+    "  -g, --glob <pattern>     Find files matching pattern",
+    "  --ref <ref>              Override branch/tag/SHA",
+    "  --branch <name>          Alias for --ref",
+    "  --pattern <text>         Pattern for repository or code searches",
+    "  --language <lang>        Filter repositories by language",
+    "  --limit <n>              Limit results",
+    "  --offset <n>             Skip results before returning",
+    "  --path <glob>            Restrict code/commit search to path",
+    "  --query <text>           Additional query for commit search",
+    "  --author <user>          Filter commits by author",
+    "  --since <iso>            Filter commits >= ISO 8601 date",
+    "  --until <iso>            Filter commits <= ISO 8601 date",
+    "  --base <ref>             Base reference for diffs",
+    "  --head <ref>             Head reference for diffs",
+    "  --include-patches        Include patch text in diff results",
+    "  --line-numbers           Prefix read output with line numbers",
+    "  --list-repos             List repositories for org/user",
+    "  --org <name>             List repositories for organization",
+    "  --user <name>            List repositories for user",
+    "  --search-repos           Search accessible and public repositories",
+    "  --search-code            Run code search (requires --pattern)",
+    "  -A <n>                   Show n lines after search match",
+    "  -B <n>                   Show n lines before search match", 
+    "  -C <n>                   Show n lines before/after search match",
+    "  --context <n>            Same as -C for search-code",
+    "  --commit-search          Search commits within repository",
+    "  --diff                   Compare two refs within repository",
+    "",
+    "EXAMPLES:",
+    "  gh-viewer --repo facebook/react -l packages",
+    "  gh-viewer --repo owner/name -r README.md -j",
+    "  gh-viewer --repo owner/name -g \"**/*.ts\" --limit 10",
+    "  gh-viewer --org my-org --search-repos --pattern \"cli\" -j",
   ];
   console.log(lines.join("\n"));
 }

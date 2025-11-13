@@ -1,16 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-// Import the CLI module to test argument parsing
 let parseArgs;
 try {
   const cliModule = await import("../dist/cli.js");
-  // Access the parseArgs function - it's not exported, so we need to test via CLI execution
 } catch (error) {
   console.log("CLI module not available for direct testing");
 }
 
-// Since parseArgs is not exported, we'll test CLI behavior via execution
 import { execSync } from "node:child_process";
 
 function runCli(...args) {
@@ -19,7 +16,7 @@ function runCli(...args) {
       encoding: "utf8", 
       cwd: process.cwd(),
       timeout: 5000,
-      stdio: ['pipe', 'pipe', 'pipe'] // Capture both stdout and stderr
+      stdio: ['pipe', 'pipe', 'pipe']
     });
   } catch (error) {
     return (error.stdout || "") + (error.stderr || "");
@@ -27,18 +24,14 @@ function runCli(...args) {
 }
 
 test("CLI --line-range option", async () => {
-  // Test with a known file and repo that should be accessible
   const output = runCli(
     "--repo", "kennyfrc/gh-viewer",
     "--read", "src/cli.ts",
     "--line-range", "1", "5"
   );
   
-  // Should not contain error messages  
   assert.ok(!output.includes("Unknown option"));
-  assert.ok(!output.includes("CliError:")); // Error messages from the CLI itself
-  
-  // Should contain the expected range output indicator
+  assert.ok(!output.includes("CliError:"));
   assert.ok(output.includes("@1-5"));
 });
 
@@ -119,7 +112,6 @@ test("CLI error: invalid --line-range (end < start)", async () => {
 });
 
 test("CLI warning: --line-range overrides @suffix", async () => {
-  // Use a simpler approach with file output to capture everything
   const { spawn } = await import("node:child_process");
   
   return new Promise((resolve, reject) => {
@@ -148,7 +140,6 @@ test("CLI warning: --line-range overrides @suffix", async () => {
     
     child.on("error", reject);
     
-    // Fallback timeout
     setTimeout(() => {
       child.kill();
       reject(new Error("Test timed out"));
@@ -177,28 +168,8 @@ test("CLI --help shows new options", async () => {
 });
 
 test("CLI context actually affects search output", async () => {
-  // Import the createSnippetsFromLines function directly to test it
   const { createViewer } = await import("../dist/viewer.js");
   const viewer = createViewer();
-  
-  // Test createSnippetsFromLines function directly
-  const testLines = [
-    "line 1",
-    "line 2", 
-    "line 3",
-    "line 4",
-    "line 5",
-    "line 6",
-    "line 7",
-    "line 8"
-  ];
-  
-  // Simulate a match at line 4 (index 3)
-  const matchIndices = [3];
-  
-  // Mock the createSnippetsFromLines function by accessing its internal behavior
-  // through searchCode with mock data would be complex, so let's test the pattern
-  // by checking the CLI can parse context flags correctly
   
   const outputDefault = runCli(
     "--repo", "kennyfrc/gh-viewer",
@@ -211,17 +182,14 @@ test("CLI context actually affects search output", async () => {
     "--repo", "kennyfrc/gh-viewer", 
     "--search-code",
     "--pattern", "createSnippetsFromLines",
-    "-C", "0", // Use 0 context to minimize lines
+    "-C", "0",
     "--json"
   );
   
-  // Both should not have CLI parsing errors
   assert.ok(!outputDefault.includes("CliError:"));
   assert.ok(!outputWithContext.includes("CliError:"));
   assert.ok(!outputDefault.includes("Unknown option:"));
   assert.ok(!outputWithContext.includes("Unknown option:"));
   
-  // The key test: CLI should accept and process context flags without errors
-  // This demonstrates the context parameter is being passed through correctly
   assert.ok(true, "Context flags are properly processed by CLI");
 });
