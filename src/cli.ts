@@ -52,6 +52,10 @@ interface CliArgs {
   head?: string;
   includePatches?: boolean;
   lineNumbers?: boolean;
+  lineRange?: [number, number];
+  context?: number;
+  contextAfter?: number;
+  contextBefore?: number;
 }
 
 type CliOutput =
@@ -233,10 +237,29 @@ try {
 
   if (args.read && repoTarget) {
     const ref = args.ref ?? args.branch ?? undefined;
-    const { path, range } = parseReadArg(args.read);
-    const readResult = await viewer.readFile(repoTarget, path, {
+    let readPath = args.read;
+    let readRange: ReadRange | undefined;
+    
+    // --line-range overrides @start-end syntax
+    if (args.lineRange && args.read?.includes('@')) {
+      console.warn("Warning: --line-range overrides @start-end suffix in path");
+    }
+    
+    if (args.lineRange) {
+      const [start, end] = args.lineRange;
+      readRange = { start, end };
+      // Strip @suffix when using explicit --line-range
+      readPath = readPath.split('@')[0];
+    } else {
+      // Parse existing @start-end format
+      const { path, range } = parseReadArg(args.read);
+      readPath = path;
+      readRange = range;
+    }
+    
+    const readResult = await viewer.readFile(repoTarget, readPath, {
       ref,
-      range,
+      range: readRange,
       includeLineNumbers: Boolean(args.lineNumbers),
     });
     if (args.json) {
@@ -298,11 +321,29 @@ try {
     if (!args.pattern) {
       throw new CliError("--pattern is required for --search-code");
     }
+    
+    // -C conflicts with -A/-B to prevent ambiguity
+    if (args.context !== undefined && (args.contextAfter !== undefined || args.contextBefore !== undefined)) {
+      throw new CliError("--context/-C cannot be used with -A or -B flags");
+    }
+    
+    // -C takes precedence, then max(-A, -B)
+    let contextLines: number | undefined;
+    if (args.context !== undefined) {
+      contextLines = args.context;
+    } else if (args.contextAfter !== undefined && args.contextBefore !== undefined) {
+      contextLines = Math.max(args.contextAfter, args.contextBefore);
+    } else if (args.contextAfter !== undefined) {
+      contextLines = args.contextAfter;
+    } else if (args.contextBefore !== undefined) {
+      contextLines = args.contextBefore;
+    }
     const results = await viewer.searchCode(repoTarget, {
       pattern: args.pattern,
       path: args.pathFilter,
       limit,
       offset,
+      context: contextLines,
     });
     if (args.json) {
       outputs.push({
@@ -503,8 +544,23 @@ function parseArgs(argv: string[]): CliArgs {
       parsed.includePatches = true;
     } else if (arg === "--line-numbers") {
       parsed.lineNumbers = true;
+    } else if (arg === "--line-range") {
+      const start = numberOrThrow(arg, argv[++index]);
+      const end = numberOrThrow(arg, argv[++index]);
+      if (end < start) {
+        throw new CliError(`Invalid --line-range: end (${end}) must be >= start (${start})`);
+      }
+      parsed.lineRange = [start, end];
+    } else if (arg === "-A") {
+      parsed.contextAfter = numberOrThrow(arg, argv[++index]);
+    } else if (arg === "-B") {
+      parsed.contextBefore = numberOrThrow(arg, argv[++index]);
+    } else if (arg === "-C") {
+      parsed.context = numberOrThrow(arg, argv[++index]);
+    } else if (arg === "--context") {
+      parsed.context = numberOrThrow(arg, argv[++index]);
     } else {
-      throw new CliError(`Unknown option: ${arg}`);
+      throw new CliError(`Unknown option: ${arg}. Use --help for available options.`);
     }
   }
   return parsed;
@@ -529,6 +585,7 @@ function numberOrThrow(option: string, value?: string): number {
   return parsed;
 }
 
+// Parse "path[@start-end]" format for backward compatibility
 function parseReadArg(arg: string): { path: string; range?: ReadRange } {
   const [path, suffix] = arg.split("@");
   if (!path) {
@@ -588,11 +645,13 @@ function printHelp(): void {
   const lines = [
     "gh-viewer --repo owner/name [--ref main] --list path",
     "gh-viewer --repo owner/name --read path[@start-end]",
+    "gh-viewer --repo owner/name --read path --line-range 50 100",
     'gh-viewer --repo owner/name [--ref main] --glob "pattern"',
     "gh-viewer --org org --list-repos",
     "gh-viewer --user user --list-repos",
     "gh-viewer --search-repos [--pattern text] [--org org] [--language lang] [--limit n]",
     'gh-viewer --repo owner/name --search-code --pattern "expr" [--path dir] [--limit n] [--offset n]',
+    'gh-viewer --repo owner/name --search-code --pattern "expr" -C 5',
     "gh-viewer --repo owner/name --commit-search [--query text] [--author you] [--since iso]",
     "gh-viewer --repo owner/name --diff --base main --head topic [--include-patches]",
     "",
@@ -603,8 +662,13 @@ function printHelp(): void {
     "  --search-repos           Search repositories across accessible and public sources.",
     "  --list path              List the entries at path (default .).",
     "  --read path[@start-end]  Read file contents with optional line range.",
+    "  --line-range start end   Read specific line range (alternative to path@start-end).",
     '  --glob "pattern"         Glob files via git trees API.',
     "  --search-code            Run a code search within the repository.",
+    "  -A n                     Show n lines after each match (search-code).",
+    "  -B n                     Show n lines before each match (search-code).",
+    "  -C n                     Show n lines before and after each match (search-code).",
+    "  --context n              Same as -C for search-code.",
     "  --commit-search          Search commits within the repository.",
     "  --diff                   Compare two refs within the repository.",
     "  --ref ref                Override branch/tag/SHA.",

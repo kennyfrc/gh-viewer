@@ -91,6 +91,7 @@ export interface CodeSearchOptions {
   path?: string;
   limit?: number;
   offset?: number;
+  context?: number;
 }
 
 export interface CodeSearchSnippet {
@@ -308,9 +309,7 @@ interface GitHubCompareResponse {
   files?: GitHubCompareFile[];
 }
 
-/**
- * Binds GitHub REST calls to a fetch implementation while reusing auth and HEADERS for every viewer method.
- */
+/** Creates viewer with GitHub auth and fetch binding */
 export function createViewer(options: ViewerOptions = {}): Viewer {
   const fetchImpl = options.fetchImpl ?? fetch;
   const authToken = options.token ?? process.env.GITHUB_TOKEN ?? null;
@@ -367,9 +366,7 @@ export function createViewer(options: ViewerOptions = {}): Viewer {
     return results.filter((entry) => entry.length > 0);
   }
 
-  /**
-   * Prefers repositories the caller can access via /user or /org listings before falling back to public search so private hits stay ahead of noisy global results.
-   */
+  /** Prioritizes accessible repos before falling back to public search */
   async function searchRepositories(
     params: RepositorySearchParams = {}
   ): Promise<RepositorySummary[]> {
@@ -527,9 +524,7 @@ export function createViewer(options: ViewerOptions = {}): Viewer {
     return sorted.slice(offset, offset + limit).map((entry) => entry.summary);
   }
 
-  /**
-   * Returns directory entries with type metadata; limit/offset are sliced client-side because GitHub lacks native pagination per path.
-   */
+  /** Returns directory entries; client-side limit/offset due to API limitations */
   async function listPath(
     repo: RepoTarget,
     rawPath: string,
@@ -567,9 +562,7 @@ export function createViewer(options: ViewerOptions = {}): Viewer {
     };
   }
 
-  /**
-   * Decodes file content and can emit stable line numbers so downstream tooling keeps transcripts reproducible.
-   */
+  /** Decodes file content and adds stable line numbers */
   async function readFile(
     repo: RepoTarget,
     filePath: string,
@@ -643,8 +636,8 @@ export function createViewer(options: ViewerOptions = {}): Viewer {
   }
 
   /**
-   * Uses code search API then hydrates blob contents to rebuild multi-line snippets instead of trusting GitHub’s truncated fragments.
-   */
+   * Hydrates blob contents to rebuild full multi-line snippets
+ */
   async function searchCode(
     repo: RepoTarget,
     options: CodeSearchOptions
@@ -722,7 +715,7 @@ export function createViewer(options: ViewerOptions = {}): Viewer {
       }
       const fileLines = fileCache.get(cacheKey) ?? [];
       const matchLines = collectMatchLineIndices(item.text_matches ?? [], fileLines);
-      const snippets = createSnippetsFromLines(fileLines, matchLines);
+      const snippets = createSnippetsFromLines(fileLines, matchLines, options.context);
       prepared.push({
         repository: {
           owner: targetRepo.owner,
@@ -742,8 +735,8 @@ export function createViewer(options: ViewerOptions = {}): Viewer {
   }
 
   /**
-   * Wraps the commit search preview API, translating filters into GitHub qualifiers while normalizing stats metadata.
-   */
+   * Wraps commit search API with GitHub qualifiers and normalized stats
+ */
   async function searchCommits(
     repo: RepoTarget,
     options: CommitSearchOptions = {}
@@ -801,9 +794,7 @@ export function createViewer(options: ViewerOptions = {}): Viewer {
     }));
   }
 
-  /**
-   * Calls the compare endpoint and optionally propagates unified patches so callers choose between summary stats and full diffs.
-   */
+  /** Calls compare endpoint; optionally includes unified patches */
   async function compareCommits(
     repo: RepoTarget,
     base: string,
@@ -898,15 +889,16 @@ export function createViewer(options: ViewerOptions = {}): Viewer {
 
   function createSnippetsFromLines(
     fileLines: string[],
-    indices: number[]
+    indices: number[],
+    context: number = 2
   ): CodeSearchSnippet[] {
     if (indices.length === 0) {
       return [];
     }
     const snippets: CodeSearchSnippet[] = [];
     for (const index of indices) {
-      const start = Math.max(0, index - 2);
-      const endExclusive = Math.min(fileLines.length, index + 3);
+      const start = Math.max(0, index - context);
+      const endExclusive = Math.min(fileLines.length, index + context + 1);
       snippets.push({
         startLine: start + 1,
         endLine: Math.max(start + 1, endExclusive),
