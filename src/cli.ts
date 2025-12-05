@@ -127,17 +127,16 @@ type CliOutput =
     };
 
 const viewer = createViewer();
+const outputs: CliOutput[] = [];
+let performedAction = false;
+
+try {
 const args = parseArgs(process.argv.slice(2));
 
 if (args.help) {
   printHelp();
   process.exit(0);
 }
-
-const outputs: CliOutput[] = [];
-let performedAction = false;
-
-try {
   if (args.listRepos) {
     const scope = args.org
       ? ({ type: "org", value: args.org } as Scope)
@@ -471,9 +470,13 @@ try {
   }
 } catch (error) {
   if (error instanceof CliError || error instanceof ViewerError) {
-    console.error(error.message);
+    console.log(error.message);
+    if (error instanceof CliError && error.message.includes("Unknown option")) {
+      console.log("");
+      printMiniHelp();
+    }
   } else {
-    console.error(error instanceof Error ? error.message : String(error));
+    console.log(error instanceof Error ? error.message : String(error));
   }
   process.exit(1);
 }
@@ -644,6 +647,24 @@ function logSuccess(action: string, detail?: string): void {
   if (detail) {
     console.log(detail);
   }
+}
+
+function printMiniHelp(): void {
+  const lines = [
+    "AVAILABLE OPTIONS:",
+    "  -h, --help         Show full help",
+    "  -l, --list         List directory entries",
+    "  -r, --read         Read file contents", 
+    "  -g, --glob         Find files matching pattern",
+    "  --search-code      Search code (requires --pattern)",
+    "  --commit-search    Search commits",
+    "  --diff             Compare two refs (requires --base, --head)",
+    "  --list-repos       List repositories (requires --org or --user)",
+    "  --search-repos     Search repositories",
+    "",
+    "Run 'gh-viewer --help' for full usage information.",
+  ];
+  console.log(lines.join("\n"));
 }
 
 function printHelp(): void {

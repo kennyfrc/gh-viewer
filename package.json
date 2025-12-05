@@ -1,6 +1,6 @@
 {
   "name": "@kennyfrc/gh-viewer",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "CLI to explore GitHub repositories via the REST API without cloning.",
   "license": "MIT",
   "author": "Kenn Costales",

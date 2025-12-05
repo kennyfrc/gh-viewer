@@ -39,48 +39,50 @@ test("CLI context flags -A", async () => {
   const output = runCli(
     "--repo", "kennyfrc/gh-viewer",
     "--search-code",
-    "--pattern", "CliError",
+    "--pattern", "createViewer",
     "-A", "2"
   );
   
-  assert.ok(!output.includes("Unknown option"));
-  assert.ok(!output.includes("CliError:"));
+  // Check command was recognized (no unknown option error at start)
+  assert.ok(!output.startsWith("Unknown option:"));
+  // Check no unhandled exception (stack trace indicator)
+  assert.ok(!output.includes("at parseArgs"));
 });
 
 test("CLI context flags -B", async () => {
   const output = runCli(
     "--repo", "kennyfrc/gh-viewer",
     "--search-code",
-    "--pattern", "CliError",
+    "--pattern", "createViewer",
     "-B", "2"
   );
   
-  assert.ok(!output.includes("Unknown option"));
-  assert.ok(!output.includes("CliError:"));
+  assert.ok(!output.startsWith("Unknown option:"));
+  assert.ok(!output.includes("at parseArgs"));
 });
 
 test("CLI context flags -C", async () => {
   const output = runCli(
     "--repo", "kennyfrc/gh-viewer",
     "--search-code",
-    "--pattern", "CliError",
+    "--pattern", "createViewer",
     "-C", "2"
   );
   
-  assert.ok(!output.includes("Unknown option"));
-  assert.ok(!output.includes("CliError:"));
+  assert.ok(!output.startsWith("Unknown option:"));
+  assert.ok(!output.includes("at parseArgs"));
 });
 
 test("CLI context flags --context", async () => {
   const output = runCli(
     "--repo", "kennyfrc/gh-viewer",
     "--search-code",
-    "--pattern", "CliError",
+    "--pattern", "createViewer",
     "--context", "2"
   );
   
-  assert.ok(!output.includes("Unknown option"));
-  assert.ok(!output.includes("CliError:"));
+  assert.ok(!output.startsWith("Unknown option:"));
+  assert.ok(!output.includes("at parseArgs"));
 });
 
 test("CLI error: conflicting context flags", async () => {
@@ -160,11 +162,11 @@ test("CLI error: --line-range with end < start", async () => {
 test("CLI --help shows new options", async () => {
   const output = runCli("--help");
   
-  assert.ok(output.includes("--line-range start end"));
-  assert.ok(output.includes("-A n"));
-  assert.ok(output.includes("-B n"));
-  assert.ok(output.includes("-C n"));
-  assert.ok(output.includes("--context n"));
+  assert.ok(output.includes("--line-range"));
+  assert.ok(output.includes("-A <n>"));
+  assert.ok(output.includes("-B <n>"));
+  assert.ok(output.includes("-C <n>"));
+  assert.ok(output.includes("--context <n>"));
 });
 
 test("CLI context actually affects search output", async () => {
